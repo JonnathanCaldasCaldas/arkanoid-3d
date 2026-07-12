@@ -25,12 +25,17 @@ const float VISIBLE_MAX_Y =  2.62f;             // Límite superior jugable para
 const float ROOM_MIN_Z = -6.2f;                // Pared del fondo del cuarto, ubicada detrás de la pared de bloques.
 const float ROOM_MAX_Z =  2.4f;                // Límite frontal del cuarto, cercano al jugador y a la cámara.
 const float BLOCK_WALL_Z = -4.55f;             // Plano central donde se colocan los objetos gráficos bloque.
-const float BLOCK_SIZE_X = 2.42f;              // Ancho grande de cada objeto gráfico bloque para que se vea casi tres veces más grande que antes.
-const float BLOCK_SIZE_Y = 1.20f;              // Alto grande de cada objeto gráfico bloque para llenar desde piso hasta techo.
-const float BLOCK_SIZE_Z = 0.78f;              // Profundidad del objeto gráfico bloque para que se perciba claramente en 3D.
+const float BLOCK_SIZE_X = 1.8f;              // Ancho grande de cada objeto gráfico bloque para que se vea casi tres veces más grande que antes.
+const float BLOCK_SIZE_Y = 1.30f;              // Alto grande de cada objeto gráfico bloque para llenar desde piso hasta techo.
+const float BLOCK_SIZE_Z = 1.00f;              // Profundidad del objeto gráfico bloque para que se perciba claramente en 3D.
 const float BLOCK_FRONT_Z = BLOCK_WALL_Z + BLOCK_SIZE_Z * 0.5f; // Cara frontal de la pared de bloques, usada como límite físico.
 const float MIN_TRAJECTORY_Z_RATIO = 0.42f;    // Mínimo componente Z de la dirección para evitar rebotes infinitos sólo en piso/techo.
 const float MAX_TRAJECTORY_Y_RATIO = 0.68f;    // Máximo componente Y de la dirección para que la esfera no se vuelva casi vertical.
+
+const int INITIAL_LIVES = 5;                   // Vidas iniciales.
+const glm::vec3 INITIAL_BALL_POSITION(0.05f, -2.05f, 1.10f); // Posición inicial de la bola.
+const glm::vec3 INITIAL_BALL_DIRECTION(0.55f, 1.00f, -2.65f); // Dirección inicial de la bola.
+const glm::vec3 INITIAL_PADDLE_POSITION(0.0f, -2.35f, 1.65f); // Posición inicial del padel.
 
 struct Vertex {                                // Vértice para modo retenido.
     glm::vec3 position;                         // Posición local del vértice.
@@ -61,6 +66,7 @@ struct Material {                              // Material iluminado.
     float emissive = 0.0f;                      // Luz propia visual del objeto.
     glm::vec3 accentColor = glm::vec3(1.0f);      // Color secundario usado para degradados y bordes neón.
     int gradientMode = 0;                         // 1 activa degradado especial en el fragment shader.
+    int ballMode = 0;
 };                                             // Fin de Material.
 
 struct Block {                                 // Objeto gráfico bloque.
@@ -73,17 +79,17 @@ struct Block {                                 // Objeto gráfico bloque.
 };                                             // Fin de Block.
 
 struct Ball {                                  // Esfera del juego.
-    glm::vec3 position = glm::vec3(0, -2.05f, 1.10f);             // Posición inicial cerca del padel para iniciar el recorrido hacia los bloques.
+    glm::vec3 position = INITIAL_BALL_POSITION;             // Posición inicial cerca del padel para iniciar el recorrido hacia los bloques.
     glm::vec3 velocity = glm::normalize(glm::vec3(0.55f, 1.00f, -2.65f)); // Dirección inicial con avance fuerte en Z hacia la pared de bloques.
-    float radius = 0.19f;                       // Radio de la esfera.
+    float radius = 0.25f;                       // Radio de la esfera.
     float speed = 3.35f;                        // Rapidez constante de la esfera, sin cambiar la fuerza al chocar con el padel.
     glm::vec3 spinAxis = glm::vec3(0, 1, 0);    // Eje de rotación visual.
     float spinAngle = 0.0f;                     // Ángulo acumulado.
 };                                             // Fin de Ball.
 
 struct Paddle {                                // Padel controlado por teclado.
-    glm::vec3 position = glm::vec3(0, -2.35f, 1.70f); // Posición inicial del padel en el frente del cuarto, ajustada para que el nuevo padel más ancho no se pierda abajo.
-    glm::vec3 size = glm::vec3(2.45f, 0.52f, 0.54f);  // Tamaño físico del padel, ahora más largo y más ancho para que sea más visible y cómodo de controlar.
+    glm::vec3 position = INITIAL_PADDLE_POSITION; // Posición inicial del padel en el frente del cuarto, ajustada para que el nuevo padel más ancho no se pierda abajo.
+    glm::vec3 size = glm::vec3(2.00f, 0.80f, 0.55f);  // Tamaño físico del padel, ahora más largo y más ancho para que sea más visible y cómodo de controlar.
     float speed = 4.25f;                         // Velocidad de movimiento para alcanzar también la zona superior del cuarto.
 };                                             // Fin de Paddle.
 
@@ -91,10 +97,11 @@ struct Game {                                  // Estado completo del juego.
     Ball ball;                                  // Esfera.
     Paddle paddle;                              // Padel.
     std::vector<Block> blocks;                  // Pared de objetos gráficos bloque.
-    int lives = 3;                              // Vidas.
+    int lives = INITIAL_LIVES;                              // Vidas.
     bool victory = false;                       // Estado de victoria.
     bool gameOver = false;                      // Estado de derrota.
-};                                             // Fin de Game.
+    bool resetKeyHeld = false;                  // Tecla de reinicio presionada.
+};                                              // Fin de Game.
 
 std::string readFile(const std::string& path) {                    // Lee un archivo de texto.
     std::ifstream file(path);                                      // Abre el archivo.
@@ -237,6 +244,7 @@ void setMaterial(GLuint p, const Material& m) {                           // Env
     glUniform1f(glGetUniformLocation(p, "uEmissive"), m.emissive);                            // Envía emisión.
     glUniform3fv(glGetUniformLocation(p, "uAccentColor"), 1, glm::value_ptr(m.accentColor));     // Envía color de acento para degradados neón.
     glUniform1i(glGetUniformLocation(p, "uGradientMode"), m.gradientMode);                       // Envía modo de degradado para bloques.
+    glUniform1i(glGetUniformLocation(p, "uBallMode"), m.ballMode);                             // Envía modo de degradado para bola.
 }                                                                        // Fin de setMaterial.
 
 void drawMesh(const Mesh& m) {                                            // Dibuja una malla retenida.
@@ -297,19 +305,19 @@ bool blockWallStillVisible(const Game& g) {                                 // I
 void createBlocks(Game& g) {                                               // Crea la pared completa de objetos gráficos bloque.
     g.blocks.clear();                                                       // Borra cualquier bloque anterior antes de construir una nueva partida.
     const int rows = 5;                                                     // Número de filas grandes para cubrir casi todo el alto del cuarto.
-    const int cols = 4;                                                     // Número de columnas grandes para cubrir casi todo el ancho del cuarto.
-    const float gapX = 0.04f;                                                // Separación horizontal mínima para que la pared quede casi cerrada.
-    const float gapY = 0.04f;                                                // Separación vertical mínima para cubrir desde piso hasta techo.
+    const int cols = 5;                                                     // Número de columnas grandes para cubrir casi todo el ancho del cuarto.
+    const float gapX = 0.2f;                                                // Separación horizontal mínima para que la pared quede casi cerrada.
+    const float gapY = 0.2f;                                                // Separación vertical mínima para cubrir desde piso hasta techo.
     const float totalWidth = cols * BLOCK_SIZE_X + (cols - 1) * gapX;        // Ancho total ocupado por la pared de bloques.
     const float totalHeight = rows * BLOCK_SIZE_Y + (rows - 1) * gapY;       // Alto total ocupado por la pared de bloques.
     const float startX = -totalWidth * 0.5f + BLOCK_SIZE_X * 0.5f;           // Posición X del primer bloque para centrar la pared.
     const float startY = -totalHeight * 0.5f + BLOCK_SIZE_Y * 0.5f;          // Posición Y del primer bloque para cubrir de piso a techo.
     glm::vec3 colors[5] = {                                                 // Paleta de colores neón por fila.
-        {1.0f,0.05f,0.12f},                                                 // Fila roja inferior con saturación alta.
-        {1.0f,0.82f,0.03f},                                                 // Fila amarilla neón.
-        {0.00f,0.95f,0.35f},                                                // Fila verde neón.
-        {0.00f,0.60f,1.0f},                                                 // Fila azul/cian intenso.
-        {1.00f,0.03f,0.95f}                                                 // Fila magenta superior.
+        {1.0f,0.10f,0.12f},                                                 // Fila roja inferior con saturación alta.
+        {1.0f,0.62f,0.08f},                                                 // Fila amarilla neón.
+        {0.08f,1.00f,0.35f},                                                // Fila verde neón.
+        {0.08f,0.55f,1.0f},                                                 // Fila azul/cian intenso.
+        {0.92f,0.12f,1.00f}                                                 // Fila magenta superior.
     };                                                                      // Fin de la paleta.
     for (int r = 0; r < rows; ++r) {                                        // Recorre cada fila de la pared.
         for (int c = 0; c < cols; ++c) {                                    // Recorre cada columna de la pared.
@@ -323,23 +331,29 @@ void createBlocks(Game& g) {                                               // Cr
 }                                                                           // Fin de createBlocks.
 
 void resetBall(Game& g) {                                                   // Reinicia la esfera.
-    g.ball.position = glm::vec3(0.0f, -2.05f, 1.10f);                        // Reinicia la esfera cerca del padel.
-    g.ball.velocity = glm::normalize(glm::vec3(0.55f, 1.00f, -2.65f)) * g.ball.speed; // Reinicia con trayectoria real hacia la pared de bloques.
+    g.ball.position = INITIAL_BALL_POSITION;                        // Reinicia la esfera cerca del padel.
+    g.ball.velocity = glm::normalize(INITIAL_BALL_DIRECTION) * g.ball.speed; // Reinicia con trayectoria real hacia la pared de bloques.
     g.ball.spinAngle = 0.0f;                                                // Reinicia rotación.
 }                                                                           // Fin de resetBall.
 
 void resetGame(Game& g) {                                                   // Reinicia la partida.
-    g.lives = 3;                                                            // Reinicia vidas.
+    g.lives = INITIAL_LIVES;                                                // Reinicia vidas.
     g.victory = false;                                                       // Quita victoria.
     g.gameOver = false;                                                      // Quita derrota.
-    g.paddle.position = glm::vec3(0.0f, -2.35f, 1.65f);                      // Reinicia el padel dentro del área visible con el nuevo tamaño más alto.
+    g.paddle.position = INITIAL_PADDLE_POSITION;                             // Reinicia el padel
     resetBall(g);                                                           // Reinicia esfera.
     createBlocks(g);                                                        // Reconstruye pared de bloques.
 }                                                                           // Fin de resetGame.
 
 void processInput(GLFWwindow* w, Game& g, float dt) {                       // Procesa teclado.
     if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(w, true); // ESC cierra.
-    if (glfwGetKey(w, GLFW_KEY_R) == GLFW_PRESS) resetGame(g);              // R reinicia.
+    
+    bool resetPressed = glfwGetKey(w, GLFW_KEY_R) == GLFW_PRESS;             // Guarda tecla de reinicio presionada.
+    if (resetPressed && !g.resetKeyHeld){
+        resetGame(g);
+    }                                                                     // R reinicia.
+    g.resetKeyHeld = resetPressed;
+
     if (g.victory || g.gameOver) return;                                    // No mueve si terminó.
     float d = g.paddle.speed * dt;                                          // Distancia del padel.
     if (glfwGetKey(w, GLFW_KEY_LEFT) == GLFW_PRESS)  g.paddle.position.x -= d; // Flecha izquierda.
@@ -347,7 +361,7 @@ void processInput(GLFWwindow* w, Game& g, float dt) {                       // P
     if (glfwGetKey(w, GLFW_KEY_UP) == GLFW_PRESS)    g.paddle.position.y += d; // Flecha arriba.
     if (glfwGetKey(w, GLFW_KEY_DOWN) == GLFW_PRESS)  g.paddle.position.y -= d; // Flecha abajo.
     g.paddle.position.x = std::clamp(g.paddle.position.x, ROOM_MIN_X + g.paddle.size.x * 0.5f, ROOM_MAX_X - g.paddle.size.x * 0.5f); // Limita X.
-    g.paddle.position.y = std::clamp(g.paddle.position.y, VISIBLE_MIN_Y + g.paddle.size.y * 0.5f, VISIBLE_MAX_Y - g.paddle.size.y * 0.5f); // Limita Y dentro del área visible para que el padel nunca se pierda arriba ni abajo.
+    g.paddle.position.y = std::clamp(g.paddle.position.y, ROOM_MIN_Y + g.paddle.size.y * 0.5f, ROOM_MAX_Y - g.paddle.size.y * 0.5f); // Limita Y del padel.
 }                                                                           // Fin de processInput.
 
 void updateSpin(Ball& b, float dt) {                                        // Actualiza rotación de la esfera.
@@ -372,13 +386,13 @@ void updateGame(Game& g, float dt) {                                        // A
         b.velocity = reflectKeepSpeed(b.velocity, glm::vec3(-1,0,0), b.speed); // Refleja con normal hacia la izquierda.
         stabilizeBallVelocity(b);                                           // Mantiene un avance mínimo hacia padel o bloques.
     }                                                                       // Fin de choque con pared derecha.
-    if (b.position.y - b.radius < VISIBLE_MIN_Y) {                          // Verifica choque con el límite inferior visible.
-        b.position.y = VISIBLE_MIN_Y + b.radius;                             // Coloca la esfera dentro del área visible inferior.
+    if (b.position.y - b.radius < ROOM_MIN_Y) {                          // Verifica choque con el límite inferior visible.
+        b.position.y = ROOM_MIN_Y + b.radius;                             // Coloca la esfera dentro del área visible inferior.
         b.velocity = reflectKeepSpeed(b.velocity, glm::vec3(0,1,0), b.speed); // Refleja con normal hacia arriba.
         stabilizeBallVelocity(b);                                           // Corrige el caso donde sólo rebota entre piso y techo.
     }                                                                       // Fin de choque con piso.
-    if (b.position.y + b.radius > VISIBLE_MAX_Y) {                          // Verifica choque con el límite superior visible.
-        b.position.y = VISIBLE_MAX_Y - b.radius;                             // Coloca la esfera dentro del área visible superior.
+    if (b.position.y + b.radius > ROOM_MAX_Y) {                          // Verifica choque con el límite superior visible.
+        b.position.y = ROOM_MAX_Y - b.radius;                             // Coloca la esfera dentro del área visible superior.
         b.velocity = reflectKeepSpeed(b.velocity, glm::vec3(0,-1,0), b.speed); // Refleja con normal hacia abajo.
         stabilizeBallVelocity(b);                                           // Corrige el caso donde sólo rebota entre techo y piso.
     }                                                                       // Fin de choque con techo.
@@ -441,87 +455,413 @@ void updateGame(Game& g, float dt) {                                        // A
 void title(GLFWwindow* w, const Game& g) {                                    // Actualiza título informativo.
     int left = 0;                                                             // Contador de bloques activos.
     for (const Block& b : g.blocks) if (b.alive) left++;                      // Cuenta bloques restantes.
-    std::string t = "Arkanoid 3D - Lives: " + std::to_string(g.lives) + " - Objetos graficos: " + std::to_string(left); // Título normal.
+    std::string t = "Arkanoid 3D - Vidas: " + std::to_string(g.lives) + " - Objetos gráficos: " + std::to_string(left); // Título normal.
     if (g.victory) t = "ARKANOID 3D - VICTORIA - presiona R";                // Título victoria.
     if (g.gameOver) t = "ARKANOID 3D - GAME OVER - presiona R";              // Título derrota.
     glfwSetWindowTitle(w, t.c_str());                                        // Cambia título.
 }                                                                            // Fin de title.
 
-void renderRoom(GLuint p, const Mesh& cube) {                                 // Renderiza el cuarto, sus márgenes y su iluminación neón.
-    Material wall{{0.025f,0.065f,0.145f},0.30f,48.0f,0.055f,0.045f};        // Material translúcido con leve emisión propia azul.
-    Transform floor;                                                        // Crea transformación para el piso.
-    floor.translation = glm::vec3(0.0f, ROOM_MIN_Y - 0.035f, -1.90f);       // Ubica el piso debajo del área de juego.
-    floor.scale = glm::vec3(10.35f, 0.05f, 8.75f);                          // Escala el piso para cubrir todo el cuarto.
-    drawObject(p, cube, floor, wall);                                       // Dibuja el piso iluminado.
-    Transform ceil;                                                         // Crea transformación para el techo.
-    ceil.translation = glm::vec3(0.0f, ROOM_MAX_Y + 0.035f, -1.90f);        // Ubica el techo encima del área de juego.
-    ceil.scale = glm::vec3(10.35f, 0.05f, 8.75f);                           // Escala el techo para cubrir todo el cuarto.
-    drawObject(p, cube, ceil, wall);                                        // Dibuja el techo iluminado.
-    Transform leftWall;                                                     // Crea transformación para la pared izquierda.
-    leftWall.translation = glm::vec3(ROOM_MIN_X - 0.035f, 0.0f, -1.90f);    // Ubica la pared izquierda.
-    leftWall.scale = glm::vec3(0.05f, 6.55f, 8.75f);                        // Escala la pared izquierda en alto y profundidad.
-    drawObject(p, cube, leftWall, wall);                                    // Dibuja la pared izquierda.
-    Transform rightWall;                                                    // Crea transformación para la pared derecha.
-    rightWall.translation = glm::vec3(ROOM_MAX_X + 0.035f, 0.0f, -1.90f);   // Ubica la pared derecha.
-    rightWall.scale = glm::vec3(0.05f, 6.55f, 8.75f);                       // Escala la pared derecha en alto y profundidad.
-    drawObject(p, cube, rightWall, wall);                                   // Dibuja la pared derecha.
-    Transform backWall;                                                     // Crea transformación para la pared del fondo.
-    backWall.translation = glm::vec3(0.0f, 0.0f, ROOM_MIN_Z - 0.035f);      // Ubica la pared de fondo detrás de bloques.
-    backWall.scale = glm::vec3(10.35f, 6.55f, 0.05f);                       // Escala el fondo para cerrar el cuarto.
-    drawObject(p, cube, backWall, wall);                                    // Dibuja la pared de fondo.
-    Material neonBlue{{0.0f,0.70f,1.0f},0.98f,160.0f,0.045f,0.65f};         // Material azul neón para márgenes principales.
-    Material neonMagenta{{1.0f,0.05f,0.95f},0.98f,160.0f,0.045f,0.55f};     // Material magenta neón para esquinas alternadas.
-    Material gridMat{{0.0f,0.35f,0.95f},0.48f,80.0f,0.06f,0.14f};           // Material suave para cuadrícula del cuarto.
-    for (float x = ROOM_MIN_X; x <= ROOM_MAX_X + 0.01f; x += 0.75f) {       // Recorre líneas de cuadrícula paralelas al eje Z.
-        Transform t;                                                        // Crea una línea como cubo delgado.
-        t.translation = glm::vec3(x, ROOM_MIN_Y + 0.018f, -1.90f);          // Coloca la línea sobre el piso.
-        t.scale = glm::vec3(0.018f, 0.018f, 8.60f);                         // Hace la línea fina y profunda.
-        drawObject(p, cube, t, gridMat);                                    // Dibuja línea de cuadrícula.
-    }                                                                       // Termina líneas del eje Z.
-    for (float z = ROOM_MIN_Z; z <= ROOM_MAX_Z + 0.01f; z += 0.75f) {       // Recorre líneas de cuadrícula paralelas al eje X.
-        Transform t;                                                        // Crea una línea como cubo delgado.
-        t.translation = glm::vec3(0.0f, ROOM_MIN_Y + 0.022f, z);            // Coloca la línea sobre el piso.
-        t.scale = glm::vec3(10.05f, 0.014f, 0.018f);                        // Hace la línea fina y horizontal.
-        drawObject(p, cube, t, gridMat);                                    // Dibuja línea de cuadrícula.
-    }                                                                       // Termina líneas del eje X.
-    for (float y = ROOM_MIN_Y; y <= ROOM_MAX_Y + 0.01f; y += 0.75f) {       // Recorre alturas para líneas laterales.
-        Transform l;                                                        // Línea en pared izquierda.
-        l.translation = glm::vec3(ROOM_MIN_X + 0.015f, y, -1.90f);          // Coloca línea en pared izquierda.
-        l.scale = glm::vec3(0.016f, 0.016f, 8.60f);                         // Escala la línea lateral.
-        drawObject(p, cube, l, gridMat);                                    // Dibuja línea izquierda.
-        Transform r;                                                        // Línea en pared derecha.
-        r.translation = glm::vec3(ROOM_MAX_X - 0.015f, y, -1.90f);          // Coloca línea en pared derecha.
-        r.scale = glm::vec3(0.016f, 0.016f, 8.60f);                         // Escala la línea lateral.
-        drawObject(p, cube, r, gridMat);                                    // Dibuja línea derecha.
-    }                                                                       // Termina cuadrícula lateral.
-    glm::vec3 xs[2] = {glm::vec3(ROOM_MIN_X,0,0), glm::vec3(ROOM_MAX_X,0,0)}; // Guarda extremos X para dibujar aristas.
-    glm::vec3 ys[2] = {glm::vec3(0,ROOM_MIN_Y,0), glm::vec3(0,ROOM_MAX_Y,0)}; // Guarda extremos Y para dibujar aristas.
-    glm::vec3 zs[2] = {glm::vec3(0,0,ROOM_MIN_Z), glm::vec3(0,0,ROOM_MAX_Z)}; // Guarda extremos Z para dibujar aristas.
-    for (int yi = 0; yi < 2; ++yi) {                                       // Dibuja aristas horizontales inferior/superior.
-        for (int zi = 0; zi < 2; ++zi) {                                   // Dibuja aristas en fondo y frente.
-            Transform edge;                                                // Crea una arista paralela a X.
-            edge.translation = glm::vec3(0.0f, ys[yi].y, zs[zi].z);         // Ubica arista X.
-            edge.scale = glm::vec3(10.15f, 0.04f, 0.04f);                  // Escala arista X.
-            drawObject(p, cube, edge, zi == 0 ? neonBlue : neonMagenta);    // Dibuja arista con color neón.
-        }                                                                  // Termina recorrido Z.
-    }                                                                      // Termina recorrido Y.
-    for (int xi = 0; xi < 2; ++xi) {                                       // Dibuja aristas verticales.
-        for (int zi = 0; zi < 2; ++zi) {                                   // Recorre fondo y frente.
-            Transform edge;                                                // Crea una arista paralela a Y.
-            edge.translation = glm::vec3(xs[xi].x, 0.0f, zs[zi].z);         // Ubica arista Y.
-            edge.scale = glm::vec3(0.04f, 6.55f, 0.04f);                   // Escala arista Y.
-            drawObject(p, cube, edge, neonBlue);                           // Dibuja arista azul neón.
-        }                                                                  // Termina recorrido Z.
-    }                                                                      // Termina recorrido X.
-    for (int xi = 0; xi < 2; ++xi) {                                       // Dibuja aristas profundas del cuarto.
-        for (int yi = 0; yi < 2; ++yi) {                                   // Recorre piso y techo.
-            Transform edge;                                                // Crea una arista paralela a Z.
-            edge.translation = glm::vec3(xs[xi].x, ys[yi].y, -1.90f);       // Ubica arista Z.
-            edge.scale = glm::vec3(0.04f, 0.04f, 8.65f);                   // Escala arista Z.
-            drawObject(p, cube, edge, xi == 0 ? neonBlue : neonMagenta);    // Dibuja arista profunda.
-        }                                                                  // Termina recorrido Y.
-    }                                                                      // Termina recorrido X.
-}                                                                            // Fin de renderRoom.
+void renderRoom(GLuint p, const Mesh& cube) {
+    const float wallThickness = 0.05f;
+    const float edgeThickness = 0.04f;
+
+    // Dimensiones calculadas a partir de los límites físicos del cuarto.
+    const float roomWidth  = ROOM_MAX_X - ROOM_MIN_X;
+    const float roomHeight = ROOM_MAX_Y - ROOM_MIN_Y;
+    const float roomDepth  = ROOM_MAX_Z - ROOM_MIN_Z;
+
+    // Centro real del cuarto.
+    const float centerX = (ROOM_MIN_X + ROOM_MAX_X) * 0.5f;
+    const float centerY = (ROOM_MIN_Y + ROOM_MAX_Y) * 0.5f;
+    const float centerZ = (ROOM_MIN_Z + ROOM_MAX_Z) * 0.5f;
+
+    Material wall{
+        {0.025f, 0.065f, 0.145f},
+        0.30f,
+        48.0f,
+        0.055f,
+        0.01f
+    };
+
+    // Piso
+    Transform floor;
+    floor.translation = glm::vec3(
+        centerX,
+        ROOM_MIN_Y - wallThickness * 0.5f,
+        centerZ
+    );
+    floor.scale = glm::vec3(
+        roomWidth,
+        wallThickness,
+        roomDepth
+    );
+    drawObject(p, cube, floor, wall);
+
+    // Techo
+    Transform ceil;
+    ceil.translation = glm::vec3(
+        centerX,
+        ROOM_MAX_Y + wallThickness * 0.5f,
+        centerZ
+    );
+    ceil.scale = glm::vec3(
+        roomWidth,
+        wallThickness,
+        roomDepth
+    );
+    drawObject(p, cube, ceil, wall);
+
+    // Pared izquierda
+    Transform leftWall;
+    leftWall.translation = glm::vec3(
+        ROOM_MIN_X - wallThickness * 0.5f,
+        centerY,
+        centerZ
+    );
+    leftWall.scale = glm::vec3(
+        wallThickness,
+        roomHeight,
+        roomDepth
+    );
+    drawObject(p, cube, leftWall, wall);
+
+    // Pared derecha
+    Transform rightWall;
+    rightWall.translation = glm::vec3(
+        ROOM_MAX_X + wallThickness * 0.5f,
+        centerY,
+        centerZ
+    );
+    rightWall.scale = glm::vec3(
+        wallThickness,
+        roomHeight,
+        roomDepth
+    );
+    drawObject(p, cube, rightWall, wall);
+
+    // Pared del fondo
+    Transform backWall;
+    backWall.translation = glm::vec3(
+        centerX,
+        centerY,
+        ROOM_MIN_Z - wallThickness * 0.5f
+    );
+    backWall.scale = glm::vec3(
+        roomWidth,
+        roomHeight,
+        wallThickness
+    );
+    drawObject(p, cube, backWall, wall);
+
+    Material neonBlue{
+        {0.0f, 0.70f, 1.0f},
+        0.98f,
+        160.0f,
+        0.045f,
+        0.25f
+    };
+
+    Material neonMagenta{
+        {1.0f, 0.05f, 0.95f},
+        0.98f,
+        160.0f,
+        0.045f,
+        0.25f
+    };
+
+    Material gridMat{
+        {0.00f, 0.38f, 0.95f},  // Azul de la cuadrícula
+        0.55f,                   // Transparencia
+        100.0f,                  // Brillo especular
+        0.030f,                  // Atenuación
+        0.12f                    // Emisión para que sea visible
+    };
+
+    float xs[2] = {ROOM_MIN_X, ROOM_MAX_X};
+    float ys[2] = {ROOM_MIN_Y, ROOM_MAX_Y};
+    float zs[2] = {ROOM_MIN_Z, ROOM_MAX_Z};
+
+    const float gridStep = 0.75f;       // Distancia entre líneas
+    const float gridThickness = 0.014f; // Grosor de las líneas
+    const float surfaceOffset = 0.012f; // Evita z-fighting con las paredes
+
+    // Líneas del piso paralelas al eje Z
+    for (float x = ROOM_MIN_X + gridStep;
+        x < ROOM_MAX_X;
+        x += gridStep) {
+
+        Transform line;
+
+        line.translation = glm::vec3(
+            x,
+            ROOM_MIN_Y + surfaceOffset,
+            centerZ
+        );
+
+        line.scale = glm::vec3(
+            gridThickness,
+            gridThickness,
+            roomDepth
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Líneas del piso paralelas al eje X
+    for (float z = ROOM_MIN_Z + gridStep;
+        z < ROOM_MAX_Z;
+        z += gridStep) {
+
+        Transform line;
+
+        line.translation = glm::vec3(
+            centerX,
+            ROOM_MIN_Y + surfaceOffset,
+            z
+        );
+
+        line.scale = glm::vec3(
+            roomWidth,
+            gridThickness,
+            gridThickness
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Aristas paralelas al eje X.
+    for (int yi = 0; yi < 2; ++yi) {
+        for (int zi = 0; zi < 2; ++zi) {
+            Transform edge;
+
+            edge.translation = glm::vec3(
+                centerX,
+                ys[yi],
+                zs[zi]
+            );
+
+            edge.scale = glm::vec3(
+                roomWidth + edgeThickness,
+                edgeThickness,
+                edgeThickness
+            );
+
+            drawObject(
+                p,
+                cube,
+                edge,
+                zi == 0 ? neonBlue : neonMagenta
+            );
+        }
+    }
+
+    // Aristas paralelas al eje Y.
+    for (int xi = 0; xi < 2; ++xi) {
+        for (int zi = 0; zi < 2; ++zi) {
+            Transform edge;
+
+            edge.translation = glm::vec3(
+                xs[xi],
+                centerY,
+                zs[zi]
+            );
+
+            edge.scale = glm::vec3(
+                edgeThickness,
+                roomHeight + edgeThickness,
+                edgeThickness
+            );
+
+            drawObject(p, cube, edge, neonBlue);
+        }
+    }
+
+    // Líneas horizontales profundas de las paredes laterales
+    for (float y = ROOM_MIN_Y + gridStep;
+        y < ROOM_MAX_Y;
+        y += gridStep) {
+
+        Transform leftLine;
+        leftLine.translation = glm::vec3(
+            ROOM_MIN_X + surfaceOffset,
+            y,
+            centerZ
+        );
+
+        leftLine.scale = glm::vec3(
+            gridThickness,
+            gridThickness,
+            roomDepth
+        );
+
+        drawObject(p, cube, leftLine, gridMat);
+
+        Transform rightLine;
+        rightLine.translation = glm::vec3(
+            ROOM_MAX_X - surfaceOffset,
+            y,
+            centerZ
+        );
+
+        rightLine.scale = glm::vec3(
+            gridThickness,
+            gridThickness,
+            roomDepth
+        );
+
+        drawObject(p, cube, rightLine, gridMat);
+    }
+
+    // Líneas verticales de las paredes laterales
+    for (float z = ROOM_MIN_Z + gridStep;
+        z < ROOM_MAX_Z;
+        z += gridStep) {
+
+        Transform leftLine;
+        leftLine.translation = glm::vec3(
+            ROOM_MIN_X + surfaceOffset,
+            centerY,
+            z
+        );
+
+        leftLine.scale = glm::vec3(
+            gridThickness,
+            roomHeight,
+            gridThickness
+        );
+
+        drawObject(p, cube, leftLine, gridMat);
+
+        Transform rightLine;
+        rightLine.translation = glm::vec3(
+            ROOM_MAX_X - surfaceOffset,
+            centerY,
+            z
+        );
+
+        rightLine.scale = glm::vec3(
+            gridThickness,
+            roomHeight,
+            gridThickness
+        );
+
+        drawObject(p, cube, rightLine, gridMat);
+    }
+
+    // Líneas verticales de la pared del fondo
+    for (float x = ROOM_MIN_X + gridStep;
+        x < ROOM_MAX_X;
+        x += gridStep) {
+
+        Transform line;
+
+        line.translation = glm::vec3(
+            x,
+            centerY,
+            ROOM_MIN_Z + surfaceOffset
+        );
+
+        line.scale = glm::vec3(
+            gridThickness,
+            roomHeight,
+            gridThickness
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Líneas horizontales de la pared del fondo
+    for (float y = ROOM_MIN_Y + gridStep;
+        y < ROOM_MAX_Y;
+        y += gridStep) {
+
+        Transform line;
+
+        line.translation = glm::vec3(
+            centerX,
+            y,
+            ROOM_MIN_Z + surfaceOffset
+        );
+
+        line.scale = glm::vec3(
+            roomWidth,
+            gridThickness,
+            gridThickness
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Líneas del techo paralelas al eje Z
+    for (float x = ROOM_MIN_X + gridStep;
+        x < ROOM_MAX_X;
+        x += gridStep) {
+
+        Transform line;
+
+        line.translation = glm::vec3(
+            x,
+            ROOM_MAX_Y - surfaceOffset, // Debajo del techo, dentro del cuarto
+            centerZ
+        );
+
+        line.scale = glm::vec3(
+            gridThickness,
+            gridThickness,
+            roomDepth
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Líneas del techo paralelas al eje X
+    for (float z = ROOM_MIN_Z + gridStep;
+        z < ROOM_MAX_Z;
+        z += gridStep) {
+
+        Transform line;
+
+        line.translation = glm::vec3(
+            centerX,
+            ROOM_MAX_Y - surfaceOffset,
+            z
+        );
+
+        line.scale = glm::vec3(
+            roomWidth,
+            gridThickness,
+            gridThickness
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Aristas paralelas al eje Z.
+    for (int xi = 0; xi < 2; ++xi) {
+        for (int yi = 0; yi < 2; ++yi) {
+            Transform edge;
+
+            edge.translation = glm::vec3(
+                xs[xi],
+                ys[yi],
+                centerZ
+            );
+
+            edge.scale = glm::vec3(
+                edgeThickness,
+                edgeThickness,
+                roomDepth + edgeThickness
+            );
+
+            drawObject(
+                p,
+                cube,
+                edge,
+                xi == 0 ? neonBlue : neonMagenta
+            );
+        }
+    }
+}                                                                           // Fin de renderRoom.
 
 void renderBlocks(GLuint p, const Mesh& cube, const Game& g) {                // Renderiza la pared de objetos gráficos bloque con aspecto neón y más profundidad visual.
     for (const Block& b : g.blocks) {                                         // Recorre cada objeto gráfico bloque de la pared.
@@ -533,123 +873,183 @@ void renderBlocks(GLuint p, const Mesh& cube, const Game& g) {                //
         body.scale = b.size * f;                                              // Reduce el bloque suavemente cuando está desapareciendo.
         Material bodyMat;                                                     // Crea el material principal con degradado.
         bodyMat.color = b.color;                                              // Asigna el color base de la fila del bloque.
-        bodyMat.alpha = f;                                                    // Usa el factor de desaparición como transparencia.
+        bodyMat.alpha = 1.0f;                                                    // Usa el factor de desaparición como transparencia.
         bodyMat.shininess = 180.0f;                                           // Usa alto brillo especular para aspecto plástico/cristal neón.
-        bodyMat.attenuationScale = 0.040f;                                    // Mantiene iluminación sensible a la distancia de la esfera.
-        bodyMat.emissive = 0.12f * f;                                         // Agrega una emisión leve para que el bloque no se vea plano.
-        bodyMat.accentColor = accent;                                         // Envía el color secundario al shader para el degradado.
-        bodyMat.gradientMode = 1;                                             // Activa el modo de degradado especial en el fragment shader.
+        bodyMat.attenuationScale = 0.015f;                                    // Mantiene iluminación sensible a la distancia de la esfera.
+        bodyMat.emissive = 0.06f * f;                                         // Agrega una emisión leve para que el bloque no se vea plano.
+        bodyMat.accentColor = b.color;                                         // Envía el color secundario al shader para el degradado.
+        bodyMat.gradientMode = 0;                                             // Activa el modo de degradado especial en el fragment shader.
         drawObject(p, cube, body, bodyMat);                                   // Dibuja el cuerpo principal del objeto gráfico bloque.
 
-        Transform frontPanel;                                                 // Crea una placa frontal más pequeña para simular bisel 3D.
-        frontPanel.translation = b.position + glm::vec3(0.0f, 0.0f, b.size.z * 0.515f * f); // Ubica la placa en la cara frontal del bloque.
-        frontPanel.scale = glm::vec3(b.size.x * 0.78f * f, b.size.y * 0.58f * f, 0.035f * f); // Reduce la placa para dejar bordes visibles.
-        Material panelMat;                                                    // Crea material para la placa frontal brillante.
-        panelMat.color = glm::mix(b.color, accent, 0.48f);                    // Mezcla color base con acento para crear degradado visual.
-        panelMat.alpha = 0.72f * f;                                           // Hace la placa ligeramente translúcida.
-        panelMat.shininess = 220.0f;                                          // Aumenta brillo para reflejo fuerte.
-        panelMat.attenuationScale = 0.038f;                                   // Aplica atenuación por distancia de la bola.
-        panelMat.emissive = 0.28f * f;                                        // Agrega emisión para efecto neón.
-        panelMat.accentColor = glm::vec3(1.0f);                               // Usa blanco como acento especular del centro.
-        panelMat.gradientMode = 1;                                            // Activa degradado también en la placa frontal.
-        drawObject(p, cube, frontPanel, panelMat);                            // Dibuja la placa frontal del bloque.
+        //Transform frontPanel;                                                 // Crea una placa frontal más pequeña para simular bisel 3D.
+        //frontPanel.translation = b.position + glm::vec3(0.0f, 0.0f, b.size.z * 0.515f * f); // Ubica la placa en la cara frontal del bloque.
+        //frontPanel.scale = glm::vec3(b.size.x * 0.78f * f, b.size.y * 0.58f * f, 0.035f * f); // Reduce la placa para dejar bordes visibles.
+        //Material panelMat;                                                    // Crea material para la placa frontal brillante.
+        //panelMat.color = glm::mix(b.color, accent, 0.48f);                    // Mezcla color base con acento para crear degradado visual.
+        //panelMat.alpha = 0.72f * f;                                           // Hace la placa ligeramente translúcida.
+        //panelMat.shininess = 220.0f;                                          // Aumenta brillo para reflejo fuerte.
+        //panelMat.attenuationScale = 0.038f;                                   // Aplica atenuación por distancia de la bola.
+        //panelMat.emissive = 0.04f * f;                                        // Agrega emisión para efecto neón.
+        //panelMat.accentColor = glm::vec3(1.0f);                               // Usa blanco como acento especular del centro.
+        //panelMat.gradientMode = 1;                                            // Activa degradado también en la placa frontal.
+        //drawObject(p, cube, frontPanel, panelMat);                            // Dibuja la placa frontal del bloque.
 
         Material neonEdge;                                                    // Crea material para bordes neón físicos del bloque.
         neonEdge.color = accent;                                              // Usa color claro como borde luminoso.
-        neonEdge.alpha = 0.98f * f;                                           // Mantiene los bordes visibles durante la desaparición.
-        neonEdge.shininess = 256.0f;                                          // Usa brillo máximo para bordes intensos.
-        neonEdge.attenuationScale = 0.036f;                                   // Permite que la bola ilumine el borde según distancia.
-        neonEdge.emissive = 0.55f * f;                                        // Hace que los bordes tengan luz propia neón.
-        neonEdge.accentColor = glm::vec3(1.0f);                               // Define blanco como acento del borde.
+        neonEdge.alpha = 0.65f * f;                                           // Mantiene los bordes visibles durante la desaparición.
+        neonEdge.shininess = 220.0f;                                          // Usa brillo máximo para bordes intensos.
+        neonEdge.attenuationScale = 0.015f;                                   // Permite que la bola ilumine el borde según distancia.
+        neonEdge.emissive = 0.08f * f;                                        // Hace que los bordes tengan luz propia neón.
+        neonEdge.accentColor = accent;                               // Define blanco como acento del borde.
         neonEdge.gradientMode = 0;                                            // Desactiva degradado porque el borde ya es una pieza luminosa.
 
-        Transform topEdge;                                                    // Crea borde superior del bloque.
-        topEdge.translation = b.position + glm::vec3(0.0f, b.size.y * 0.49f * f, b.size.z * 0.55f * f); // Ubica borde superior en la cara frontal.
-        topEdge.scale = glm::vec3(b.size.x * 0.88f * f, 0.045f * f, 0.075f * f); // Escala el borde superior como barra delgada.
-        drawObject(p, cube, topEdge, neonEdge);                               // Dibuja borde superior.
+        //Transform topEdge;                                                    // Crea borde superior del bloque.
+        //topEdge.translation = b.position + glm::vec3(0.0f, b.size.y * 0.49f * f, b.size.z * 0.55f * f); // Ubica borde superior en la cara frontal.
+        //topEdge.scale = glm::vec3(b.size.x * 0.88f * f, 0.045f * f, 0.075f * f); // Escala el borde superior como barra delgada.
+        //drawObject(p, cube, topEdge, neonEdge);                               // Dibuja borde superior.
+//
+        //Transform bottomEdge;                                                 // Crea borde inferior del bloque.
+        //bottomEdge.translation = b.position + glm::vec3(0.0f, -b.size.y * 0.49f * f, b.size.z * 0.55f * f); // Ubica borde inferior en la cara frontal.
+        //bottomEdge.scale = glm::vec3(b.size.x * 0.88f * f, 0.045f * f, 0.075f * f); // Escala el borde inferior como barra delgada.
+        //drawObject(p, cube, bottomEdge, neonEdge);                            // Dibuja borde inferior.
+//
+        //Transform leftEdge;                                                   // Crea borde izquierdo del bloque.
+        //leftEdge.translation = b.position + glm::vec3(-b.size.x * 0.49f * f, 0.0f, b.size.z * 0.55f * f); // Ubica borde izquierdo en la cara frontal.
+        //leftEdge.scale = glm::vec3(0.050f * f, b.size.y * 0.78f * f, 0.075f * f); // Escala el borde izquierdo como barra vertical.
+        //drawObject(p, cube, leftEdge, neonEdge);                              // Dibuja borde izquierdo.
+//
+        //Transform rightEdge;                                                  // Crea borde derecho del bloque.
+        //rightEdge.translation = b.position + glm::vec3(b.size.x * 0.49f * f, 0.0f, b.size.z * 0.55f * f); // Ubica borde derecho en la cara frontal.
+        //rightEdge.scale = glm::vec3(0.050f * f, b.size.y * 0.78f * f, 0.075f * f); // Escala el borde derecho como barra vertical.
+        //drawObject(p, cube, rightEdge, neonEdge);                             // Dibuja borde derecho.
 
-        Transform bottomEdge;                                                 // Crea borde inferior del bloque.
-        bottomEdge.translation = b.position + glm::vec3(0.0f, -b.size.y * 0.49f * f, b.size.z * 0.55f * f); // Ubica borde inferior en la cara frontal.
-        bottomEdge.scale = glm::vec3(b.size.x * 0.88f * f, 0.045f * f, 0.075f * f); // Escala el borde inferior como barra delgada.
-        drawObject(p, cube, bottomEdge, neonEdge);                            // Dibuja borde inferior.
-
-        Transform leftEdge;                                                   // Crea borde izquierdo del bloque.
-        leftEdge.translation = b.position + glm::vec3(-b.size.x * 0.49f * f, 0.0f, b.size.z * 0.55f * f); // Ubica borde izquierdo en la cara frontal.
-        leftEdge.scale = glm::vec3(0.050f * f, b.size.y * 0.78f * f, 0.075f * f); // Escala el borde izquierdo como barra vertical.
-        drawObject(p, cube, leftEdge, neonEdge);                              // Dibuja borde izquierdo.
-
-        Transform rightEdge;                                                  // Crea borde derecho del bloque.
-        rightEdge.translation = b.position + glm::vec3(b.size.x * 0.49f * f, 0.0f, b.size.z * 0.55f * f); // Ubica borde derecho en la cara frontal.
-        rightEdge.scale = glm::vec3(0.050f * f, b.size.y * 0.78f * f, 0.075f * f); // Escala el borde derecho como barra vertical.
-        drawObject(p, cube, rightEdge, neonEdge);                             // Dibuja borde derecho.
-
-        Material frame;                                                       // Crea material para contorno de alambre final.
-        frame.color = glm::vec3(1.0f);                                        // Usa blanco para remarcar aristas de volumen.
-        frame.alpha = 0.70f * f;                                              // Baja opacidad para no tapar el degradado.
-        frame.shininess = 256.0f;                                             // Usa brillo alto en el contorno.
-        frame.attenuationScale = 0.045f;                                      // Mantiene atenuación por distancia.
-        frame.emissive = 0.25f * f;                                           // Da emisión al contorno.
-        frame.accentColor = glm::vec3(1.0f);                                  // Define acento blanco.
-        frame.gradientMode = 0;                                               // Desactiva degradado del contorno.
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);                            // Cambia a modo alambre para mostrar la estructura 3D.
-        drawObject(p, cube, body, frame);                                     // Dibuja el marco del modelo sobre el bloque.
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);                            // Regresa a modo relleno normal.
+        //Material frame;                                                       // Crea material para contorno de alambre final.
+        //frame.color = glm::vec3(0.92f, 0.96f, 1.0f);                                        // Usa blanco para remarcar aristas de volumen.
+        //frame.alpha = 0.35f * f;                                              // Baja opacidad para no tapar el degradado.
+        //frame.shininess = 280.0f;                                             // Usa brillo alto en el contorno.
+        //frame.attenuationScale = 0.030f;                                      // Mantiene atenuación por distancia.
+        //frame.emissive = 0.02f * f;                                           // Da emisión al contorno.
+        //frame.accentColor = glm::vec3(1.0f);                                  // Define acento blanco.
+        //frame.gradientMode = 0;                                               // Desactiva degradado del contorno.
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);                            // Cambia a modo alambre para mostrar la estructura 3D.
+        //drawObject(p, cube, body, frame);                                     // Dibuja el marco del modelo sobre el bloque.
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);                            // Regresa a modo relleno normal.
     }                                                                         // Termina recorrido de objetos gráficos bloque.
 }                                                                             // Fin de renderBlocks.
 
-void renderPaddle(GLuint p, const Mesh& cube, const Game& g) {                 // Renderiza el padel rediseñado con extremos verdes y centro transparente.
-    Material glass;                                                           // Crea el material del centro transparente del padel.
-    glass.color = glm::vec3(0.00f, 0.78f, 0.86f);                              // Usa un tono cian verdoso para que el centro se vea como vidrio tecnológico.
-    glass.alpha = 0.30f;                                                       // Hace el centro transparente para que no se vea sólido ni pesado.
-    glass.shininess = 220.0f;                                                  // Aumenta el brillo especular para que el centro parezca cristal o acrílico.
-    glass.attenuationScale = 0.040f;                                           // Mantiene la iluminación de la esfera con caída suave por distancia.
-    glass.emissive = 0.12f;                                                    // Agrega una emisión leve para que el centro no desaparezca en zonas oscuras.
-    glass.accentColor = glm::vec3(0.0f, 1.0f, 0.75f);                           // Define un color de acento verde-cian para el material transparente.
-    glass.gradientMode = 0;                                                    // Desactiva el degradado de bloques porque el padel usa un material simple.
+//void renderPaddle(GLuint p, const Mesh& cube, const Game& g) {                 // Renderiza el padel rediseñado con extremos verdes y centro transparente.
+//    Material glass;                                                           // Crea el material del centro transparente del padel.
+//    glass.color = glm::vec3(0.00f, 0.78f, 0.86f);                              // Usa un tono cian verdoso para que el centro se vea como vidrio tecnológico.
+//    glass.alpha = 0.30f;                                                       // Hace el centro transparente para que no se vea sólido ni pesado.
+//    glass.shininess = 220.0f;                                                  // Aumenta el brillo especular para que el centro parezca cristal o acrílico.
+//    glass.attenuationScale = 0.040f;                                           // Mantiene la iluminación de la esfera con caída suave por distancia.
+//    glass.emissive = 0.02f;                                                    // Agrega una emisión leve para que el centro no desaparezca en zonas oscuras.
+//    glass.accentColor = glm::vec3(0.0f, 1.0f, 0.75f);                           // Define un color de acento verde-cian para el material transparente.
+//    glass.gradientMode = 0;                                                    // Desactiva el degradado de bloques porque el padel usa un material simple.
+//
+//    Material neonGreen;                                                        // Crea el material verde neón para los extremos y el marco del padel.
+//    neonGreen.color = glm::vec3(0.00f, 1.00f, 0.35f);                           // Usa verde intenso en lugar de rosado para cumplir el rediseño solicitado.
+//    neonGreen.alpha = 1.00f;                                                   // Mantiene los extremos completamente opacos para que funcionen como tapas visibles.
+//    neonGreen.shininess = 240.0f;                                              // Da alto brillo a las tapas verdes para reforzar el estilo neón.
+//    neonGreen.attenuationScale = 0.040f;                                       // Aplica la misma atenuación por distancia que al resto del padel.
+//    neonGreen.emissive = 0.12f;                                                // Agrega emisión fuerte para que los extremos verdes destaquen en el cuarto oscuro.
+//    neonGreen.accentColor = glm::vec3(0.45f, 1.0f, 0.70f);                      // Define un verde más claro como color secundario del material.
+//    neonGreen.gradientMode = 0;                                                // Desactiva degradado porque las tapas son piezas sólidas.
+//
+//    Transform centerPanel;                                                     // Crea la transformación del panel central transparente.
+//    centerPanel.translation = g.paddle.position;                               // Coloca el centro exactamente en la posición física del padel.
+//    centerPanel.scale = glm::vec3(g.paddle.size.x * 0.86f, g.paddle.size.y, g.paddle.size.z); // Hace el centro más largo y ancho, dejando espacio para las tapas verdes.
+//    glDepthMask(GL_FALSE);                                                     // Evita que el vidrio transparente oculte incorrectamente la bola dibujada después.
+//    drawObject(p, cube, centerPanel, glass);                                   // Dibuja el centro transparente del padel.
+//    glDepthMask(GL_TRUE);                                                      // Reactiva la escritura de profundidad para las piezas opacas siguientes.
+//
+//    Transform leftCap;                                                         // Crea la transformación del extremo izquierdo del padel.
+//    leftCap.translation = g.paddle.position + glm::vec3(-g.paddle.size.x * 0.50f, 0.0f, 0.0f); // Ubica la tapa izquierda en el borde izquierdo.
+//    leftCap.scale = glm::vec3(0.24f, g.paddle.size.y * 1.12f, g.paddle.size.z * 1.12f); // Hace la tapa izquierda más gruesa que antes para verse robusta.
+//    drawObject(p, cube, leftCap, neonGreen);                                   // Dibuja el extremo izquierdo en verde neón.
+//
+//    Transform rightCap;                                                        // Crea la transformación del extremo derecho del padel.
+//    rightCap.translation = g.paddle.position + glm::vec3(g.paddle.size.x * 0.50f, 0.0f, 0.0f); // Ubica la tapa derecha en el borde derecho.
+//    rightCap.scale = glm::vec3(0.24f, g.paddle.size.y * 1.12f, g.paddle.size.z * 1.12f); // Hace la tapa derecha igual de robusta que la izquierda.
+//    drawObject(p, cube, rightCap, neonGreen);                                  // Dibuja el extremo derecho en verde neón.
+//
+//    Transform topFrame;                                                        // Crea la barra superior del marco verde del padel.
+//    topFrame.translation = g.paddle.position + glm::vec3(0.0f, g.paddle.size.y * 0.56f, 0.0f); // Ubica el borde superior del marco.
+//    topFrame.scale = glm::vec3(g.paddle.size.x * 0.94f, 0.045f, g.paddle.size.z * 1.08f); // Hace una barra delgada que marca el límite superior sin crear líneas celestes.
+//    drawObject(p, cube, topFrame, neonGreen);                                  // Dibuja la barra superior verde.
+//
+//    Transform bottomFrame;                                                     // Crea la barra inferior del marco verde del padel.
+//    bottomFrame.translation = g.paddle.position + glm::vec3(0.0f, -g.paddle.size.y * 0.56f, 0.0f); // Ubica el borde inferior del marco.
+//    bottomFrame.scale = glm::vec3(g.paddle.size.x * 0.94f, 0.045f, g.paddle.size.z * 1.08f); // Hace una barra inferior delgada para cerrar el marco.
+//    drawObject(p, cube, bottomFrame, neonGreen);                               // Dibuja la barra inferior verde.
+//
+//    //Transform frontGlassEdge;                                                  // Crea un borde frontal muy delgado para remarcar profundidad 3D.
+//    //frontGlassEdge.translation = g.paddle.position + glm::vec3(0.0f, 0.0f, g.paddle.size.z * 0.56f); // Ubica el borde en la cara frontal mirando a la cámara.
+//    //frontGlassEdge.scale = glm::vec3(g.paddle.size.x * 0.82f, g.paddle.size.y * 0.92f, 0.030f); // Crea una placa frontal delgada, no una línea horizontal.
+//    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);                                 // Cambia a modo alambre para mostrar sólo el contorno del centro transparente.
+//    //drawObject(p, cube, frontGlassEdge, neonGreen);                            // Dibuja el contorno frontal en verde neón.
+//    //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);                                 // Regresa a modo relleno para el resto de objetos gráficos.
+//}                                                                            // Fin de renderPaddle.
 
-    Material neonGreen;                                                        // Crea el material verde neón para los extremos y el marco del padel.
-    neonGreen.color = glm::vec3(0.00f, 1.00f, 0.35f);                           // Usa verde intenso en lugar de rosado para cumplir el rediseño solicitado.
-    neonGreen.alpha = 1.00f;                                                   // Mantiene los extremos completamente opacos para que funcionen como tapas visibles.
-    neonGreen.shininess = 240.0f;                                              // Da alto brillo a las tapas verdes para reforzar el estilo neón.
-    neonGreen.attenuationScale = 0.040f;                                       // Aplica la misma atenuación por distancia que al resto del padel.
-    neonGreen.emissive = 0.78f;                                                // Agrega emisión fuerte para que los extremos verdes destaquen en el cuarto oscuro.
-    neonGreen.accentColor = glm::vec3(0.45f, 1.0f, 0.70f);                      // Define un verde más claro como color secundario del material.
-    neonGreen.gradientMode = 0;                                                // Desactiva degradado porque las tapas son piezas sólidas.
+void renderPaddle(GLuint p, const Mesh& cube, const Game& g) {
+    const float sideThickness = 0.22f;    // grosor lateral
+    const float topThickness  = 0.07f;    // grosor arriba/abajo
 
-    Transform centerPanel;                                                     // Crea la transformación del panel central transparente.
-    centerPanel.translation = g.paddle.position;                               // Coloca el centro exactamente en la posición física del padel.
-    centerPanel.scale = glm::vec3(g.paddle.size.x * 0.86f, g.paddle.size.y, g.paddle.size.z); // Hace el centro más largo y ancho, dejando espacio para las tapas verdes.
-    glDepthMask(GL_FALSE);                                                     // Evita que el vidrio transparente oculte incorrectamente la bola dibujada después.
-    drawObject(p, cube, centerPanel, glass);                                   // Dibuja el centro transparente del padel.
-    glDepthMask(GL_TRUE);                                                      // Reactiva la escritura de profundidad para las piezas opacas siguientes.
+    Material shell;
+    shell.color = glm::vec3(0.35f, 0.18f, 1.00f);   // morado azulado
+    shell.alpha = 0.95f;
+    shell.shininess = 260.0f;
+    shell.attenuationScale = 0.030f;
+    shell.emissive = 0.04f;
+    shell.accentColor = shell.color;
+    shell.gradientMode = 0;
 
-    Transform leftCap;                                                         // Crea la transformación del extremo izquierdo del padel.
-    leftCap.translation = g.paddle.position + glm::vec3(-g.paddle.size.x * 0.50f, 0.0f, 0.0f); // Ubica la tapa izquierda en el borde izquierdo.
-    leftCap.scale = glm::vec3(0.24f, g.paddle.size.y * 1.12f, g.paddle.size.z * 1.12f); // Hace la tapa izquierda más gruesa que antes para verse robusta.
-    drawObject(p, cube, leftCap, neonGreen);                                   // Dibuja el extremo izquierdo en verde neón.
+    Material glass;
+    glass.color = glm::vec3(0.55f, 0.75f, 1.00f);   // azul claro tipo cristal
+    glass.alpha = 0.18f;                            // transparencia del centro
+    glass.shininess = 280.0f;
+    glass.attenuationScale = 0.028f;
+    glass.emissive = 0.015f;
+    glass.accentColor = glass.color;
+    glass.gradientMode = 0;
 
-    Transform rightCap;                                                        // Crea la transformación del extremo derecho del padel.
-    rightCap.translation = g.paddle.position + glm::vec3(g.paddle.size.x * 0.50f, 0.0f, 0.0f); // Ubica la tapa derecha en el borde derecho.
-    rightCap.scale = glm::vec3(0.24f, g.paddle.size.y * 1.12f, g.paddle.size.z * 1.12f); // Hace la tapa derecha igual de robusta que la izquierda.
-    drawObject(p, cube, rightCap, neonGreen);                                  // Dibuja el extremo derecho en verde neón.
+    // Barra lateral izquierda
+    Transform leftBar;
+    leftBar.translation = g.paddle.position + glm::vec3(-(g.paddle.size.x - sideThickness) * 0.5f, 0.0f, 0.0f);
+    leftBar.scale = glm::vec3(sideThickness, g.paddle.size.y, g.paddle.size.z);
+    drawObject(p, cube, leftBar, shell);
 
-    Transform topFrame;                                                        // Crea la barra superior del marco verde del padel.
-    topFrame.translation = g.paddle.position + glm::vec3(0.0f, g.paddle.size.y * 0.56f, 0.0f); // Ubica el borde superior del marco.
-    topFrame.scale = glm::vec3(g.paddle.size.x * 0.94f, 0.045f, g.paddle.size.z * 1.08f); // Hace una barra delgada que marca el límite superior sin crear líneas celestes.
-    drawObject(p, cube, topFrame, neonGreen);                                  // Dibuja la barra superior verde.
+    // Barra lateral derecha
+    Transform rightBar;
+    rightBar.translation = g.paddle.position + glm::vec3((g.paddle.size.x - sideThickness) * 0.5f, 0.0f, 0.0f);
+    rightBar.scale = glm::vec3(sideThickness, g.paddle.size.y, g.paddle.size.z);
+    drawObject(p, cube, rightBar, shell);
 
-    Transform bottomFrame;                                                     // Crea la barra inferior del marco verde del padel.
-    bottomFrame.translation = g.paddle.position + glm::vec3(0.0f, -g.paddle.size.y * 0.56f, 0.0f); // Ubica el borde inferior del marco.
-    bottomFrame.scale = glm::vec3(g.paddle.size.x * 0.94f, 0.045f, g.paddle.size.z * 1.08f); // Hace una barra inferior delgada para cerrar el marco.
-    drawObject(p, cube, bottomFrame, neonGreen);                               // Dibuja la barra inferior verde.
+    // Barra superior
+    Transform topBar;
+    topBar.translation = g.paddle.position + glm::vec3(0.0f, (g.paddle.size.y - topThickness) * 0.5f, 0.0f);
+    topBar.scale = glm::vec3(g.paddle.size.x - 2.0f * sideThickness, topThickness, g.paddle.size.z);
+    drawObject(p, cube, topBar, shell);
 
-    Transform frontGlassEdge;                                                  // Crea un borde frontal muy delgado para remarcar profundidad 3D.
-    frontGlassEdge.translation = g.paddle.position + glm::vec3(0.0f, 0.0f, g.paddle.size.z * 0.56f); // Ubica el borde en la cara frontal mirando a la cámara.
-    frontGlassEdge.scale = glm::vec3(g.paddle.size.x * 0.82f, g.paddle.size.y * 0.92f, 0.030f); // Crea una placa frontal delgada, no una línea horizontal.
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);                                 // Cambia a modo alambre para mostrar sólo el contorno del centro transparente.
-    drawObject(p, cube, frontGlassEdge, neonGreen);                            // Dibuja el contorno frontal en verde neón.
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);                                 // Regresa a modo relleno para el resto de objetos gráficos.
-}                                                                             // Fin de renderPaddle.
+    // Barra inferior
+    Transform bottomBar;
+    bottomBar.translation = g.paddle.position + glm::vec3(0.0f, -(g.paddle.size.y - topThickness) * 0.5f, 0.0f);
+    bottomBar.scale = glm::vec3(g.paddle.size.x - 2.0f * sideThickness, topThickness, g.paddle.size.z);
+    drawObject(p, cube, bottomBar, shell);
+
+    // Centro transparente
+    Transform centerGlass;
+    centerGlass.translation = g.paddle.position;
+    centerGlass.scale = glm::vec3(
+        g.paddle.size.x - 2.0f * sideThickness,
+        g.paddle.size.y - 2.0f * topThickness,
+        g.paddle.size.z * 0.78f
+    );
+
+    glDepthMask(GL_FALSE);
+    drawObject(p, cube, centerGlass, glass);
+    glDepthMask(GL_TRUE);
+}
 
 void renderBall(GLuint p, const Mesh& sphere, const Game& g) {                 // Renderiza esfera/luz.
     Transform t;                                                              // Transformación de esfera.
@@ -658,7 +1058,8 @@ void renderBall(GLuint p, const Mesh& sphere, const Game& g) {                 /
     t.useAxisAngle=1;                                                         // Activa rotación eje-ángulo.
     t.axis=g.ball.spinAxis;                                                   // Eje de trayectoria.
     t.axisAngle=g.ball.spinAngle;                                             // Ángulo acumulado.
-    Material m{{0.08f,0.90f,1.0f},1.0f,256.0f,0.05f,1.15f};                  // Material emisivo.
+    Material m{{0.08f,0.90f,1.0f},1.0f,256.0f,0.05f,1.15f};                 // Material emisivo.
+    m.ballMode=1;                                                             // Modo de degradado para bola.
     drawObject(p,sphere,t,m);                                                 // Dibuja esfera.
 }                                                                             // Fin de renderBall.
 
@@ -699,20 +1100,174 @@ void renderBitmapText(GLuint p, const Mesh& cube, const std::string& text, glm::
     }                                                                       // Termina caracteres.
 }                                                                           // Fin de renderBitmapText.
 
-void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {             // Renderiza mensaje claro de victoria o derrota.
-    if (!g.victory && !g.gameOver) return;                                  // Sólo dibuja si el juego terminó.
-    glm::vec3 panelColor = g.victory ? glm::vec3(0.02f,0.85f,0.35f) : glm::vec3(1.0f,0.06f,0.08f); // Selecciona verde para victoria o rojo para derrota.
-    Material panelMat{panelColor, 0.78f, 160.0f, 0.05f, 0.30f};             // Crea material translúcido para el panel.
-    Transform panel;                                                        // Crea transformación del panel.
-    panel.translation = glm::vec3(0.0f, 0.20f, 0.55f);                      // Ubica panel delante de la escena para que sea visible.
-    panel.scale = glm::vec3(6.25f, 1.75f, 0.08f);                           // Escala panel amplio para contener el mensaje.
-    drawObject(p, cube, panel, panelMat);                                   // Dibuja el panel.
-    Material textMat{{0.0f,0.95f,1.0f},1.0f,180.0f,0.045f,0.95f};           // Material cian neón para el texto.
-    std::string line1 = g.victory ? "VICTORIA" : "GAME OVER";              // Define primera línea del mensaje.
-    std::string line2 = "PRESIONA R";                                       // Define segunda línea indicando cómo reiniciar.
-    renderBitmapText(p, cube, line1, glm::vec3(0.0f, 0.60f, 0.64f), 0.105f, textMat); // Dibuja primera línea.
-    renderBitmapText(p, cube, line2, glm::vec3(0.0f, -0.08f, 0.64f), 0.080f, textMat); // Dibuja instrucción de reinicio.
-}                                                                             // Fin de renderFinalPanel.
+void renderBitmapChar(GLuint p, const Mesh& cube, char ch, glm::vec3 pos, float pixel, const Material& mat) {
+    std::vector<std::string> g = glyph(ch);
+
+    for (int row = 0; row < 7; ++row) {
+        for (int col = 0; col < 5; ++col) {
+            if (g[row][col] != '1') continue;
+
+            Transform t;
+            t.translation = pos + glm::vec3(float(col) * pixel, -float(row) * pixel, 0.0f);
+            t.scale = glm::vec3(pixel * 0.82f, pixel * 0.82f, 0.035f);
+            drawObject(p, cube, t, mat);
+        }
+    }
+}
+
+void renderNeonWord(GLuint p,
+                    const Mesh& cube,
+                    const std::string& word,
+                    glm::vec3 start,
+                    float pixel,
+                    const std::vector<Material>& mats) {
+    float charStep = pixel * 6.0f; // ancho por letra + espacio
+
+    for (size_t i = 0; i < word.size(); ++i) {
+        renderBitmapChar(
+            p,
+            cube,
+            word[i],
+            start + glm::vec3(float(i) * charStep, 0.0f, 0.0f),
+            pixel,
+            mats[i]
+        );
+    }
+}
+
+//void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {             // Renderiza mensaje claro de victoria o derrota.
+//    if (!g.victory && !g.gameOver) return;                                  // Sólo dibuja si el juego terminó.
+//    glm::vec3 panelColor = g.victory ? glm::vec3(0.02f,0.85f,0.35f) : glm::vec3(1.0f,0.06f,0.08f); // Selecciona verde para victoria o rojo para derrota.
+//    Material panelMat{panelColor, 0.78f, 160.0f, 0.05f, 0.30f};             // Crea material translúcido para el panel.
+//    Transform panel;                                                        // Crea transformación del panel.
+//    panel.translation = glm::vec3(0.0f, 0.20f, 0.55f);                      // Ubica panel delante de la escena para que sea visible.
+//    panel.scale = glm::vec3(6.25f, 1.75f, 0.08f);                           // Escala panel amplio para contener el mensaje.
+//    drawObject(p, cube, panel, panelMat);                                   // Dibuja el panel.
+//    Material textMat{{0.0f,0.95f,1.0f},1.0f,180.0f,0.045f,0.95f};           // Material cian neón para el texto.
+//    std::string line1 = g.victory ? "VICTORIA" : "GAME OVER";              // Define primera línea del mensaje.
+//    std::string line2 = "PRESIONA R";                                       // Define segunda línea indicando cómo reiniciar.
+//    renderBitmapText(p, cube, line1, glm::vec3(0.0f, 0.60f, 0.64f), 0.105f, textMat); // Dibuja primera línea.
+//    renderBitmapText(p, cube, line2, glm::vec3(0.0f, -0.08f, 0.64f), 0.080f, textMat); // Dibuja instrucción de reinicio.
+//}                                                                         // Fin de renderFinalPanel.
+
+void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {
+    if (!g.victory && !g.gameOver) return;
+
+    // Fondo oscuro del panel
+    Material panelMat;
+    panelMat.color = glm::vec3(0.01f, 0.01f, 0.02f);
+    panelMat.alpha = 1.0f;
+    panelMat.shininess = 80.0f;
+    panelMat.attenuationScale = 0.03f;
+    panelMat.emissive = 0.02f;
+    panelMat.accentColor = panelMat.color;
+    panelMat.gradientMode = 0;
+
+    Transform panel;
+    panel.translation = glm::vec3(0.0f, 0.20f, 0.90f);
+    panel.scale = glm::vec3(5.0f, 3.00f, 0.10f);
+    drawObject(p, cube, panel, panelMat);
+
+    // Materiales neón por color
+    Material neonBlue;
+    neonBlue.color = glm::vec3(0.0f, 0.0f, 1.00f);
+    neonBlue.alpha = 1.0f;
+    neonBlue.shininess = 260.0f;
+    neonBlue.attenuationScale = 0.02f;
+    neonBlue.emissive = 1.10f;
+    neonBlue.accentColor = neonBlue.color;
+    neonBlue.gradientMode = 0;
+
+    Material neonCyan;
+    neonCyan.color = glm::vec3(0.00f, 1.00f, 0.90f);
+    neonCyan.alpha = 1.0f;
+    neonCyan.shininess = 260.0f;
+    neonCyan.attenuationScale = 0.02f;
+    neonCyan.emissive = 1.10f;
+    neonCyan.accentColor = neonCyan.color;
+    neonCyan.gradientMode = 0;
+
+    Material neonRed;
+    neonRed.color = glm::vec3(1.00f, 0.0f, 0.0f);
+    neonRed.alpha = 1.0f;
+    neonRed.shininess = 260.0f;
+    neonRed.attenuationScale = 0.02f;
+    neonRed.emissive = 1.10f;
+    neonRed.accentColor = neonRed.color;
+    neonRed.gradientMode = 0;
+
+    Material neonGreen;
+    neonGreen.color = glm::vec3(0.0f, 1.00f, 0.0f);
+    neonGreen.alpha = 1.0f;
+    neonGreen.shininess = 260.0f;
+    neonGreen.attenuationScale = 0.02f;
+    neonGreen.emissive = 1.0f;
+    neonGreen.accentColor = neonGreen.color;
+    neonGreen.gradientMode = 0;
+
+    // Material suave para el texto secundario
+    Material smallText;
+    smallText.color = glm::vec3(0.92f, 0.92f, 0.95f);
+    smallText.alpha = 1.0f;
+    smallText.shininess = 180.0f;
+    smallText.attenuationScale = 0.03f;
+    smallText.emissive = 0.20f;
+    smallText.accentColor = smallText.color;
+    smallText.gradientMode = 0;
+
+    if (g.gameOver) {
+        std::vector<Material> topRow = {neonBlue, neonCyan, neonRed, neonGreen};   // G A M E
+        std::vector<Material> bottomRow = {neonBlue, neonCyan, neonRed, neonGreen}; // O V E R
+
+        float pixel = 0.09f;
+        float charStep = pixel * 6.0f;
+        float wordWidth = 4.0f * charStep;
+
+        glm::vec3 topStart(-wordWidth * 0.5f, 0.9f, 0.98f);
+        glm::vec3 bottomStart(-wordWidth * 0.5f, -0.02f, 0.98f);
+
+        renderNeonWord(p, cube, "GAME", topStart, pixel, topRow);
+        renderNeonWord(p, cube, "OVER", bottomStart, pixel, bottomRow);
+
+        renderBitmapText(
+            p,
+            cube,
+            "PRESIONA R",
+            glm::vec3(0.0f, -0.95f, 0.98f),
+            0.050f,
+            smallText
+        );
+    }
+    else if (g.victory) {
+        // Si quieres, aquí puedes dejar otro estilo para victoria
+        Material victoryText;
+        victoryText.color = glm::vec3(0.10f, 1.00f, 0.45f);
+        victoryText.alpha = 1.0f;
+        victoryText.shininess = 250.0f;
+        victoryText.attenuationScale = 0.02f;
+        victoryText.emissive = 0.85f;
+        victoryText.accentColor = victoryText.color;
+        victoryText.gradientMode = 0;
+
+        renderBitmapText(
+            p,
+            cube,
+            "VICTORIA",
+            glm::vec3(0.0f, 0.45f, 0.98f),
+            0.085f,
+            victoryText
+        );
+
+        renderBitmapText(
+            p,
+            cube,
+            "PRESIONA R",
+            glm::vec3(0.0f, -0.45f, 0.98f),
+            0.055f,
+            smallText
+        );
+    }
+}
 
 int main() {                                                                  // Función principal.
     if (!glfwInit()) { std::cerr << "No se pudo inicializar GLFW.\n"; return -1; } // Inicializa GLFW.
@@ -728,7 +1283,7 @@ int main() {                                                                  //
     glEnable(GL_BLEND);                                                        // Activa transparencia.
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);                         // Define mezcla alfa.
     glEnable(GL_CULL_FACE);                                                    // Activa culling.
-    GLuint program = createProgram("Arkanoid3D/vertex_shader.glsl", "Arkanoid3D/fragment_shader.glsl"); // Carga shaders externos.
+    GLuint program = createProgram("vertex_shader.glsl", "fragment_shader.glsl"); // Carga shaders externos.
     if (!program) { glfwTerminate(); return -1; }                              // Valida programa.
     Mesh cube = createCubeMesh();                                              // Crea cubo retenido.
     Mesh sphere = createSphereMesh(32, 48);                                    // Crea esfera retenida.
@@ -754,9 +1309,9 @@ int main() {                                                                  //
         glUniformMatrix4fv(glGetUniformLocation(program,"uProjection"),1,GL_FALSE,glm::value_ptr(proj)); // Envía proyección.
         glUniform3fv(glGetUniformLocation(program,"uLightPos"),1,glm::value_ptr(game.ball.position)); // La luz es la bola.
         glUniform3fv(glGetUniformLocation(program,"uViewPos"),1,glm::value_ptr(cameraPos)); // Envía cámara.
-        glUniform3f(glGetUniformLocation(program,"uAmbientLight"),0.075f,0.095f,0.145f); // Luz ambiental leve para que el cuarto siempre conserve sus márgenes visibles.
-        glUniform3f(glGetUniformLocation(program,"uDiffuseLight"),1.6f,1.7f,1.85f);  // Luz difusa.
-        glUniform3f(glGetUniformLocation(program,"uSpecularLight"),2.2f,2.35f,2.45f); // Luz especular.
+        glUniform3f(glGetUniformLocation(program,"uAmbientLight"),0.10f,0.11f,0.15f); // Luz ambiental leve para que el cuarto siempre conserve sus márgenes visibles.
+        glUniform3f(glGetUniformLocation(program,"uDiffuseLight"),2.10f,2.20f,2.40f);  // Luz difusa.
+        glUniform3f(glGetUniformLocation(program,"uSpecularLight"),2.5f,2.65f,2.85f); // Luz especular.
         glDepthMask(GL_FALSE);                                                // No escribe profundidad para cuarto transparente.
         renderRoom(program, cube);                                            // Dibuja cuarto.
         glDepthMask(GL_TRUE);                                                 // Reactiva profundidad.

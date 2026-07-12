@@ -18,6 +18,7 @@ uniform float uAlpha;                                                    // Unif
 uniform float uEmissive;                                                 // Uniforme: cantidad de luz propia del material, independiente de la fuente de luz.
 uniform vec3 uAccentColor;                                               // Uniforme: color secundario usado en degradados, bordes y efecto visual neon.
 uniform int uGradientMode;                                               // Uniforme bandera: activa un sombreado especial de degradado para bloques.
+uniform int uBallMode;                                                   // Uniforme
 
 void main() {                                                            // Punto de entrada del fragment shader; se ejecuta por cada fragmento rasterizado.
     vec3 n = normalize(vNormal);                                         // Normaliza la normal interpolada para que tenga longitud 1 antes de usar productos punto.
@@ -43,7 +44,39 @@ void main() {                                                            // Punt
         float edgeXZ = max(smoothstep(0.40, 0.50, abs(vLocalPos.x)), smoothstep(0.40, 0.50, abs(vLocalPos.z))); // Mascara de borde para caras orientadas en Y.
         float edge = face.z > 0.5 ? edgeXY : (face.x > 0.5 ? edgeYZ : edgeXZ); // Elige la mascara correcta segun la cara dominante del cubo.
         objectColor += uAccentColor * edge * 0.28;                       // Suma brillo de borde para sugerir bisel/neon sin modificar la geometria real.
-    }                                                                     // Termina el bloque de color procedural para el modo degradado.
+    }  
+    
+    if (uBallMode == 1){
+        vec3 local = normalize(vLocalPos);
+
+        //Franja alrededor de la esfera
+        float stripe = 1.0 - smoothstep(
+            0.10,
+            0.20,
+            abs(local.y)
+        );
+
+        vec3 stripeColor = vec3(1.0, 0.10, 0.18);
+
+        objectColor = mix(
+            objectColor,
+            stripeColor,
+            stripe
+        );
+
+        // Pequeña marca adicional para reconocer mejor el giro.
+        float mark = smoothstep(
+            0.82,
+            0.98,
+            local.x
+        );
+
+        objectColor = mix(
+            objectColor,
+            vec3(1.0),
+            mark * 0.55
+        );
+    }                                                                   // Termina el bloque de color procedural para el modo degradado.
     vec3 ambient = uAmbientLight * objectColor;                          // Componente ambiental: ilumina el objeto de forma constante en todas las direcciones.
     vec3 diffuse = uDiffuseLight * objectColor * diff * attenuation;      // Componente difusa: color del material modulado por Lambert y atenuacion.
     vec3 specular = uSpecularLight * spec * attenuation;                  // Componente especular: reflejo blanco/color de luz modulado por distancia.
