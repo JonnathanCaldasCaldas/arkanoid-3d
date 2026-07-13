@@ -22,9 +22,9 @@ const float ROOM_MIN_Y = -3.2f;                // Piso visual del cuarto.
 const float ROOM_MAX_Y =  3.3f;                // Techo visual del cuarto.
 const float VISIBLE_MIN_Y = -2.62f;             // Límite inferior jugable para que padel y esfera nunca salgan de la cámara.
 const float VISIBLE_MAX_Y =  2.62f;             // Límite superior jugable para que padel y esfera siempre permanezcan visibles.
-const float ROOM_MIN_Z = -6.2f;                // Pared del fondo del cuarto, ubicada detrás de la pared de bloques.
+const float ROOM_MIN_Z = -7.0f;                // Pared del fondo del cuarto, ubicada detrás de la pared de bloques.
 const float ROOM_MAX_Z =  2.4f;                // Límite frontal del cuarto, cercano al jugador y a la cámara.
-const float BLOCK_WALL_Z = -4.55f;             // Plano central donde se colocan los objetos gráficos bloque.
+const float BLOCK_WALL_Z = -6.5f;             // Plano central donde se colocan los objetos gráficos bloque.
 const float BLOCK_SIZE_X = 1.8f;              // Ancho grande de cada objeto gráfico bloque para que se vea casi tres veces más grande que antes.
 const float BLOCK_SIZE_Y = 1.30f;              // Alto grande de cada objeto gráfico bloque para llenar desde piso hasta techo.
 const float BLOCK_SIZE_Z = 1.00f;              // Profundidad del objeto gráfico bloque para que se perciba claramente en 3D.
@@ -34,7 +34,7 @@ const float MAX_TRAJECTORY_Y_RATIO = 0.68f;    // Máximo componente Y de la dir
 
 const int INITIAL_LIVES = 5;                   // Vidas iniciales.
 const glm::vec3 INITIAL_BALL_POSITION(0.05f, -2.05f, 1.10f); // Posición inicial de la bola.
-const glm::vec3 INITIAL_BALL_DIRECTION(0.55f, 1.00f, -2.65f); // Dirección inicial de la bola.
+const glm::vec3 INITIAL_BALL_DIRECTION(0.6f, 1.00f, -2.65f); // Dirección inicial de la bola.
 const glm::vec3 INITIAL_PADDLE_POSITION(0.0f, -2.35f, 1.65f); // Posición inicial del padel.
 
 struct Vertex {                                // Vértice para modo retenido.
@@ -295,12 +295,12 @@ void stabilizeBallVelocity(Ball& b, int preferredZSign = 0) {              // Co
     b.velocity = glm::normalize(d) * b.speed;                               // Reaplica rapidez constante sin cambiar la fuerza de la bola.
 }                                                                           // Fin de stabilizeBallVelocity.
 
-bool blockWallStillVisible(const Game& g) {                                 // Indica si todavía existe la pared de bloques.
-    for (const Block& block : g.blocks) {                                    // Recorre todos los objetos gráficos bloque.
-        if (block.alive || block.breaking) return true;                      // Devuelve verdadero si algún bloque existe o desaparece gradualmente.
-    }                                                                       // Termina recorrido.
-    return false;                                                           // Devuelve falso si ya no queda pared.
-}                                                                           // Fin de blockWallStillVisible.
+//bool blockWallStillVisible(const Game& g) {                                 // Indica si todavía existe la pared de bloques.
+//    for (const Block& block : g.blocks) {                                    // Recorre todos los objetos gráficos bloque.
+//        if (block.alive || block.breaking) return true;                      // Devuelve verdadero si algún bloque existe o desaparece gradualmente.
+//    }                                                                       // Termina recorrido.
+//    return false;                                                           // Devuelve falso si ya no queda pared.
+//}                                                                           // Fin de blockWallStillVisible.
 
 void createBlocks(Game& g) {                                               // Crea la pared completa de objetos gráficos bloque.
     g.blocks.clear();                                                       // Borra cualquier bloque anterior antes de construir una nueva partida.
@@ -438,11 +438,11 @@ void updateGame(Game& g, float dt) {                                        // A
             break;                                                          // Rompe sólo un bloque por fotograma para evitar dobles impactos irreales.
         }                                                                    // Fin de choque con bloque.
     }                                                                        // Fin de recorrido de bloques.
-    if (!hitBlock && blockWallStillVisible(g) && b.position.z - b.radius < BLOCK_FRONT_Z) { // Evita que la bola pase detrás de la pared de bloques.
-        b.position.z = BLOCK_FRONT_Z + b.radius + 0.02f;                     // Coloca la bola delante de la cara frontal de los bloques.
-        b.velocity = reflectKeepSpeed(b.velocity, glm::vec3(0,0,1), b.speed); // Rebota contra el plano frontal de la pared.
-        stabilizeBallVelocity(b, 1);                                        // Fuerza regreso hacia el padel.
-    }                                                                        // Fin del muro invisible anti-paso detrás de bloques.
+    //if (!hitBlock && blockWallStillVisible(g) && b.position.z - b.radius < BLOCK_FRONT_Z) { // Evita que la bola pase detrás de la pared de bloques.
+    //    b.position.z = BLOCK_FRONT_Z + b.radius + 0.02f;                     // Coloca la bola delante de la cara frontal de los bloques.
+    //    b.velocity = reflectKeepSpeed(b.velocity, glm::vec3(0,0,1), b.speed); // Rebota contra el plano frontal de la pared.
+    //    stabilizeBallVelocity(b, 1);                                        // Fuerza regreso hacia el padel.
+    //}                                                                        // Fin del muro invisible anti-paso detrás de bloques.
     bool visible = false;                                                    // Variable para saber si quedan objetos gráficos visibles.
     for (const Block& block : g.blocks) {                                    // Recorre todos los bloques.
         if (block.alive || block.breaking) visible = true;                   // Marca visible si está sólido o desapareciendo.
@@ -553,14 +553,6 @@ void renderRoom(GLuint p, const Mesh& cube) {
     );
     drawObject(p, cube, backWall, wall);
 
-    Material neonBlue{
-        {0.0f, 0.70f, 1.0f},
-        0.98f,
-        160.0f,
-        0.045f,
-        0.25f
-    };
-
     Material neonMagenta{
         {1.0f, 0.05f, 0.95f},
         0.98f,
@@ -570,28 +562,28 @@ void renderRoom(GLuint p, const Mesh& cube) {
     };
 
     Material gridMat{
-        {0.00f, 0.38f, 0.95f},  // Azul de la cuadrícula
-        0.55f,                   // Transparencia
+        {0.00f, 0.55f, 1.00f},  // Azul de la cuadrícula
+        1.00f,                   // Transparencia
         100.0f,                  // Brillo especular
-        0.030f,                  // Atenuación
-        0.12f                    // Emisión para que sea visible
+        0.020f,                  // Atenuación
+        0.25f,                    // Emisión para que sea visible
     };
 
     float xs[2] = {ROOM_MIN_X, ROOM_MAX_X};
     float ys[2] = {ROOM_MIN_Y, ROOM_MAX_Y};
     float zs[2] = {ROOM_MIN_Z, ROOM_MAX_Z};
 
-    const float gridStep = 0.75f;       // Distancia entre líneas
-    const float gridThickness = 0.014f; // Grosor de las líneas
-    const float surfaceOffset = 0.012f; // Evita z-fighting con las paredes
+    const float gridStep = 1.75f;       // Distancia entre líneas
+    const float gridThickness = 0.024f; // Grosor de las líneas
+    const float surfaceOffset = 0.0012f; // Evita z-fighting con las paredes
+
+    int floorCols = static_cast<int>(roomWidth / gridStep);
+    int floorDepth = static_cast<int>(roomDepth / gridStep);
 
     // Líneas del piso paralelas al eje Z
-    for (float x = ROOM_MIN_X + gridStep;
-        x < ROOM_MAX_X;
-        x += gridStep) {
+    for (float x = ROOM_MIN_X + gridStep; x < ROOM_MAX_X; x += gridStep) {
 
         Transform line;
-
         line.translation = glm::vec3(
             x,
             ROOM_MIN_Y + surfaceOffset,
@@ -600,7 +592,7 @@ void renderRoom(GLuint p, const Mesh& cube) {
 
         line.scale = glm::vec3(
             gridThickness,
-            gridThickness,
+            0.002f,
             roomDepth
         );
 
@@ -608,12 +600,9 @@ void renderRoom(GLuint p, const Mesh& cube) {
     }
 
     // Líneas del piso paralelas al eje X
-    for (float z = ROOM_MIN_Z + gridStep;
-        z < ROOM_MAX_Z;
-        z += gridStep) {
+    for (float z = ROOM_MIN_Z + gridStep; z < ROOM_MAX_Z; z += gridStep) {
 
         Transform line;
-
         line.translation = glm::vec3(
             centerX,
             ROOM_MIN_Y + surfaceOffset,
@@ -622,7 +611,163 @@ void renderRoom(GLuint p, const Mesh& cube) {
 
         line.scale = glm::vec3(
             roomWidth,
+            0.015f,
+            gridThickness
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    int sideRows = static_cast<int>(roomHeight / gridStep);
+    int sideDepth = static_cast<int>(roomDepth / gridStep);
+
+    // Líneas horizontales profundas de las paredes laterales
+    for (float y = ROOM_MIN_Y + gridStep; y < ROOM_MAX_Y; y += gridStep) {
+
+        Transform leftLine;
+        leftLine.translation = glm::vec3(
+            ROOM_MIN_X + surfaceOffset,
+            y,
+            centerZ
+        );
+
+        leftLine.scale = glm::vec3(
+            0.002f,
             gridThickness,
+            roomDepth
+        );
+
+        drawObject(p, cube, leftLine, gridMat);
+
+        Transform rightLine;
+        rightLine.translation = glm::vec3(
+            ROOM_MAX_X - surfaceOffset,
+            y,
+            centerZ
+        );
+
+        rightLine.scale = glm::vec3(
+            0.002f,
+            gridThickness,
+            roomDepth
+        );
+
+        drawObject(p, cube, rightLine, gridMat);
+    }
+
+    // Líneas verticales de las paredes laterales
+    for (float z = ROOM_MIN_Z + gridStep; z < ROOM_MAX_Z; z += gridStep) {
+
+        Transform leftLine;
+        leftLine.translation = glm::vec3(
+            ROOM_MIN_X + surfaceOffset,
+            centerY,
+            z
+        );
+
+        leftLine.scale = glm::vec3(
+            0.02f,
+            roomHeight,
+            gridThickness
+        );
+
+        drawObject(p, cube, leftLine, gridMat);
+
+        Transform rightLine;
+        rightLine.translation = glm::vec3(
+            ROOM_MAX_X - surfaceOffset,
+            centerY,
+            z
+        );
+
+        rightLine.scale = glm::vec3(
+            0.02f,
+            roomHeight,
+            gridThickness
+        );
+
+        drawObject(p, cube, rightLine, gridMat);
+    }
+
+    // Número de divisiones para la pared del fondo
+    int backCols = static_cast<int>(roomWidth / gridStep);
+    int backRows = static_cast<int>(roomHeight / gridStep);
+
+    // Líneas verticales de la pared del fondo
+    for (float x = ROOM_MIN_X + gridStep; x < ROOM_MAX_X; x += gridStep) {
+
+        Transform line;
+        line.translation = glm::vec3(
+            x,
+            centerY,
+            ROOM_MIN_Z + surfaceOffset
+        );
+
+        line.scale = glm::vec3(
+            gridThickness,
+            roomHeight,
+            0.01f
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Líneas horizontales de la pared del fondo
+    for (float y = ROOM_MIN_Y + gridStep; y < ROOM_MAX_Y; y += gridStep) {
+
+        Transform line;
+        line.translation = glm::vec3(
+            centerX,
+            y,
+            ROOM_MIN_Z + surfaceOffset
+        );
+
+        line.scale = glm::vec3(
+            roomWidth,
+            gridThickness,
+            0.002f
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    int ceilCols = static_cast<int>(roomWidth / gridStep);
+    int ceilDepth = static_cast<int>(roomDepth / gridStep);
+
+    // Líneas del techo paralelas al eje Z
+    for (int i = 1; i < ceilCols; ++i) {
+        float x = ROOM_MIN_X + i * gridStep;
+
+        Transform line;
+        line.translation = glm::vec3(
+            x,
+            ROOM_MAX_Y - surfaceOffset,
+            centerZ
+        );
+
+        line.scale = glm::vec3(
+            gridThickness,
+            0.002f,
+            roomDepth
+        );
+
+        drawObject(p, cube, line, gridMat);
+    }
+
+    // Líneas del techo paralelas al eje X
+    for (int k = 1; k < ceilDepth; ++k) {
+        float z = ROOM_MIN_Z + k * gridStep;
+
+        Transform line;
+        line.translation = glm::vec3(
+            centerX,
+            ROOM_MAX_Y - surfaceOffset,
+            z
+        );
+
+        line.scale = glm::vec3(
+            roomWidth,
+            0.03f,
             gridThickness
         );
 
@@ -650,7 +795,7 @@ void renderRoom(GLuint p, const Mesh& cube) {
                 p,
                 cube,
                 edge,
-                zi == 0 ? neonBlue : neonMagenta
+                neonMagenta
             );
         }
     }
@@ -672,168 +817,8 @@ void renderRoom(GLuint p, const Mesh& cube) {
                 edgeThickness
             );
 
-            drawObject(p, cube, edge, neonBlue);
+            drawObject(p, cube, edge, neonMagenta);
         }
-    }
-
-    // Líneas horizontales profundas de las paredes laterales
-    for (float y = ROOM_MIN_Y + gridStep;
-        y < ROOM_MAX_Y;
-        y += gridStep) {
-
-        Transform leftLine;
-        leftLine.translation = glm::vec3(
-            ROOM_MIN_X + surfaceOffset,
-            y,
-            centerZ
-        );
-
-        leftLine.scale = glm::vec3(
-            gridThickness,
-            gridThickness,
-            roomDepth
-        );
-
-        drawObject(p, cube, leftLine, gridMat);
-
-        Transform rightLine;
-        rightLine.translation = glm::vec3(
-            ROOM_MAX_X - surfaceOffset,
-            y,
-            centerZ
-        );
-
-        rightLine.scale = glm::vec3(
-            gridThickness,
-            gridThickness,
-            roomDepth
-        );
-
-        drawObject(p, cube, rightLine, gridMat);
-    }
-
-    // Líneas verticales de las paredes laterales
-    for (float z = ROOM_MIN_Z + gridStep;
-        z < ROOM_MAX_Z;
-        z += gridStep) {
-
-        Transform leftLine;
-        leftLine.translation = glm::vec3(
-            ROOM_MIN_X + surfaceOffset,
-            centerY,
-            z
-        );
-
-        leftLine.scale = glm::vec3(
-            gridThickness,
-            roomHeight,
-            gridThickness
-        );
-
-        drawObject(p, cube, leftLine, gridMat);
-
-        Transform rightLine;
-        rightLine.translation = glm::vec3(
-            ROOM_MAX_X - surfaceOffset,
-            centerY,
-            z
-        );
-
-        rightLine.scale = glm::vec3(
-            gridThickness,
-            roomHeight,
-            gridThickness
-        );
-
-        drawObject(p, cube, rightLine, gridMat);
-    }
-
-    // Líneas verticales de la pared del fondo
-    for (float x = ROOM_MIN_X + gridStep;
-        x < ROOM_MAX_X;
-        x += gridStep) {
-
-        Transform line;
-
-        line.translation = glm::vec3(
-            x,
-            centerY,
-            ROOM_MIN_Z + surfaceOffset
-        );
-
-        line.scale = glm::vec3(
-            gridThickness,
-            roomHeight,
-            gridThickness
-        );
-
-        drawObject(p, cube, line, gridMat);
-    }
-
-    // Líneas horizontales de la pared del fondo
-    for (float y = ROOM_MIN_Y + gridStep;
-        y < ROOM_MAX_Y;
-        y += gridStep) {
-
-        Transform line;
-
-        line.translation = glm::vec3(
-            centerX,
-            y,
-            ROOM_MIN_Z + surfaceOffset
-        );
-
-        line.scale = glm::vec3(
-            roomWidth,
-            gridThickness,
-            gridThickness
-        );
-
-        drawObject(p, cube, line, gridMat);
-    }
-
-    // Líneas del techo paralelas al eje Z
-    for (float x = ROOM_MIN_X + gridStep;
-        x < ROOM_MAX_X;
-        x += gridStep) {
-
-        Transform line;
-
-        line.translation = glm::vec3(
-            x,
-            ROOM_MAX_Y - surfaceOffset, // Debajo del techo, dentro del cuarto
-            centerZ
-        );
-
-        line.scale = glm::vec3(
-            gridThickness,
-            gridThickness,
-            roomDepth
-        );
-
-        drawObject(p, cube, line, gridMat);
-    }
-
-    // Líneas del techo paralelas al eje X
-    for (float z = ROOM_MIN_Z + gridStep;
-        z < ROOM_MAX_Z;
-        z += gridStep) {
-
-        Transform line;
-
-        line.translation = glm::vec3(
-            centerX,
-            ROOM_MAX_Y - surfaceOffset,
-            z
-        );
-
-        line.scale = glm::vec3(
-            roomWidth,
-            gridThickness,
-            gridThickness
-        );
-
-        drawObject(p, cube, line, gridMat);
     }
 
     // Aristas paralelas al eje Z.
@@ -857,7 +842,7 @@ void renderRoom(GLuint p, const Mesh& cube) {
                 p,
                 cube,
                 edge,
-                xi == 0 ? neonBlue : neonMagenta
+                neonMagenta
             );
         }
     }
@@ -1164,7 +1149,7 @@ void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {
     panelMat.gradientMode = 0;
 
     Transform panel;
-    panel.translation = glm::vec3(0.0f, 0.20f, 0.90f);
+    panel.translation = glm::vec3(0.0f, 0.20f, 1.90f);
     panel.scale = glm::vec3(5.0f, 3.00f, 0.10f);
     drawObject(p, cube, panel, panelMat);
 
@@ -1223,8 +1208,8 @@ void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {
         float charStep = pixel * 6.0f;
         float wordWidth = 4.0f * charStep;
 
-        glm::vec3 topStart(-wordWidth * 0.5f, 0.9f, 0.98f);
-        glm::vec3 bottomStart(-wordWidth * 0.5f, -0.02f, 0.98f);
+        glm::vec3 topStart(-wordWidth * 0.5f, 1.0f, 1.98f);
+        glm::vec3 bottomStart(-wordWidth * 0.5f, 0.1f, 1.98f);
 
         renderNeonWord(p, cube, "GAME", topStart, pixel, topRow);
         renderNeonWord(p, cube, "OVER", bottomStart, pixel, bottomRow);
@@ -1233,7 +1218,7 @@ void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {
             p,
             cube,
             "PRESIONA R",
-            glm::vec3(0.0f, -0.95f, 0.98f),
+            glm::vec3(0.0f, -0.85f, 1.98f),
             0.050f,
             smallText
         );
@@ -1241,7 +1226,7 @@ void renderFinalPanel(GLuint p, const Mesh& cube, const Game& g) {
     else if (g.victory) {
         // Si quieres, aquí puedes dejar otro estilo para victoria
         Material victoryText;
-        victoryText.color = glm::vec3(0.10f, 1.00f, 0.45f);
+        victoryText.color = glm::vec3(0.0f, 1.00f, 0.0f);
         victoryText.alpha = 1.0f;
         victoryText.shininess = 250.0f;
         victoryText.attenuationScale = 0.02f;
@@ -1302,8 +1287,8 @@ int main() {                                                                  //
         glClearColor(0.005f, 0.008f, 0.030f, 1.0f);                            // Fondo oscuro.
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);                    // Limpia pantalla.
         glUseProgram(program);                                                 // Usa shaders.
-        glm::vec3 cameraPos(0.0f, 0.00f, 8.60f);                                // Aleja la cámara para mantener visibles el padel y la esfera en todos los límites.
-        glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, -2.35f), glm::vec3(0,1,0)); // Orienta la cámara al centro del cuarto conservando profundidad 3D.
+        glm::vec3 cameraPos(0.0f, -0.05f, 8.60f);                                // Aleja la cámara para mantener visibles el padel y la esfera en todos los límites.
+        glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, -3.30f), glm::vec3(0,1,0)); // Orienta la cámara al centro del cuarto conservando profundidad 3D.
         glm::mat4 proj = glm::perspective(glm::radians(58.0f), (float)gWidth/(float)gHeight, 0.1f, 100.0f); // Aumenta el campo de visión para que nada se pierda arriba o abajo.
         glUniformMatrix4fv(glGetUniformLocation(program,"uView"),1,GL_FALSE,glm::value_ptr(view)); // Envía vista.
         glUniformMatrix4fv(glGetUniformLocation(program,"uProjection"),1,GL_FALSE,glm::value_ptr(proj)); // Envía proyección.
