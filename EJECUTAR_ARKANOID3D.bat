@@ -6,4 +6,6 @@ if not exist Arkanoid3D\Arkanoid3D.exe (
     pause
     exit /b 1
 )
-Arkanoid3D\Arkanoid3D.exe
+pushd Arkanoid3D
+Arkanoid3D.exe
+popd
